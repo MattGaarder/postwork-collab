@@ -1,1 +1,13 @@
 # Node
+node_modules
+*.log
+# Env
+.env
+apps/*/.env
+apps/*/.env.local
+# Build
+dist
+coverage
+# Editor
+.vscode
+.DS_Store
