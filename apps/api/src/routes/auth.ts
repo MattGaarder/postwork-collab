@@ -15,6 +15,7 @@ const Register = z.object({
 
 authRouter.post('/register', async (req, res) => {
     const parsed = Register.safeParse(req.body);
+    console.log('BODY:', req.body);
     if(!parsed.success) return res.status(400).json(parsed.error.flatten());
     const { email, password, name } = parsed.data;
 
