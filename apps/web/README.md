@@ -1,43 +1,15 @@
-# Postwork Collab (postwork-collab-front)
+npm i @y/websocket-server ws
+npm i yjs y-monaco y-websocket
+import http from 'http'
+import { WebSocketServer } from 'ws'
+import { setupWSConnection } from '@y/websocket-server'
 
-A Quasar Project
+const server = http.createServer(app)
+const wss = new WebSocketServer({ noServer: true })
 
-## Install the dependencies
+server.on('upgrade', (req, socket, head) => {
+  if (!(req.url || '').startsWith('/yjs')) return socket.destroy()
+  wss.handleUpgrade(req, socket, head, ws => setupWSConnection(ws, req))
+})
 
-```bash
-yarn
-# or
-npm install
-```
-
-### Start the app in development mode (hot-code reloading, error reporting, etc.)
-
-```bash
-quasar dev
-```
-
-### Lint the files
-
-```bash
-yarn lint
-# or
-npm run lint
-```
-
-### Format the files
-
-```bash
-yarn format
-# or
-npm run format
-```
-
-### Build the app for production
-
-```bash
-quasar build
-```
-
-### Customize the configuration
-
-See [Configuring quasar.config.js](https://v2.quasar.dev/quasar-cli-vite/quasar-config-js).
+server.listen(PORT)

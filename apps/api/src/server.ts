@@ -4,13 +4,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import pino from 'pino-http';
 
-
-
 import http from 'http';
 
-
-
 const app = express();
+
 import { prisma } from './services/prisma'
 
 import { authRouter } from './routes/auth';
