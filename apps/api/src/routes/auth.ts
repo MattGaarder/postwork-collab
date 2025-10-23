@@ -26,7 +26,7 @@ authRouter.post('/register', async (req, res) => {
     });
 
     const token = jwt.sign({ id: user.id },
-        process.env.JWT_SECRET! 
+        process.env.JWT! 
     );
     res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name }});
 });
@@ -51,6 +51,6 @@ authRouter.post('/login', async(req, res) => {
         error: 'Wrong password'
     });
 
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET!);
+    const token = jwt.sign({ id: user.id }, process.env.JWT!);
     res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name }});
 })

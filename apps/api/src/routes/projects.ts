@@ -11,23 +11,61 @@ projectsRouter.get('/', async (req: AuthReq, res) => {
     // Non-null assertion (OK if your middleware always sets req.user)
     const projects = await prisma.project.findMany({ where: { ownerId: req.user!.id } });
     res.json(projects);
+});
+
+projectsRouter.get('/:id/code', async (req, res) => {
+    const id = Number(req.params.id);
+    const project = await prisma.project.findUnique({ where: { id }});
+    if(!project) return res.status(404).json({ error: 'Not found'});
+    res.json({
+        code: project.code ?? '',
+        language: project.language ?? 'JavaScript',
+    })
 })
+
+projectsRouter.put('/:id/code', async (req, res) => {
+    const id = Number(req.params.id);
+    const {code, language } = req.body as {
+        code?: string; language?: string;
+    }
+    const project = await prisma.project.findUnique({ where: { id }});
+
+    if(!project) return res.status(404).json({ error: 'Not found'});
+    const updated = await prisma.project.update({
+        where: { id },
+        data: {
+            code,
+            language: language ?? project.language,
+            updatedAt: new Date(),
+        }
+    });
+    req.app.get('io').to(`project${id}`).emit('code:replace', {
+        code: updated.code,
+    })
+    res.json({ code: updated.code, language: updated.language });
+})
+
+
 
 const CreateProject = z.object({
     name: z.string().min(1),
-    description: z.string().optional()
+    description: z.string().optional(),
+    code: z.string().default(''),
+    language: z.string().default('javascript'),
 });
 
 projectsRouter.post('/', async (req: AuthReq, res) => {
     const parsedProject = CreateProject.safeParse(req.body);
     if(!parsedProject.success) return res.status(400).json(parsedProject.error.flatten());
-    const { name, description } = parsedProject.data;
+    const { name, description, code, language } = parsedProject.data;
     const project = await prisma.project.create({
         data: {
             // Non-null assertion (OK if your middleware always sets req.user)
-            ownerId: req.user!.id,
+            owner: { connect: { id: req.user!.id }},
             name,
             description: description ?? null,
+            code,
+            language,
         }
     });
     res.status(201).json(project);
@@ -40,3 +78,4 @@ projectsRouter.delete('/:id', async (req: AuthReq, res) => {
             await prisma.project.delete({ where: { id }});
             res.status(204).send();
 });
+

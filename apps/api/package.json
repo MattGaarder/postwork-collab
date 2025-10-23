@@ -1,13 +1,15 @@
 {
   "name": "api",
   "prisma": {
-    "schema": "prisma/schema.prisma"
+    "schema": "prisma/schema.prisma",
+    "seed": "ts-node prisma/seed.ts"
   },
   "scripts": {
     "dev": "ts-node-dev --respawn src/server.ts",
     "test": "vitest",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "seed": "node prisma/seed.js"
   },
   "keywords": [],
   "author": "",
