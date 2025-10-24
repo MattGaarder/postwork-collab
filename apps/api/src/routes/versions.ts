@@ -2,8 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../services/prisma';
 import { requireAuth, AuthReq } from '../middleware/requireAuth';
-import { Language } from '@prisma/client';
-import { version } from 'os';
+
 
 export const versionsRouter = Router();
 versionsRouter.use(requireAuth);
