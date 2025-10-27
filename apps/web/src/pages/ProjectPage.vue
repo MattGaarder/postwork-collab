@@ -24,33 +24,9 @@
         />
 
         <div class="text-caption text-grey-7 g-mt-md">
-            Websocket: {{ status }}  --  Room: {{ `project-${projectId}-v-${ versionId ?? 'latest' }`}}
+            Websocket: {{ status }}  --  Room: {{ `project-${projectId}-v-${ versionId ?? 'latest' }` }}
         </div>
 
-        <!-- <div class="editor-content q-mb-md">
-            <q-input v-model="form.title" label="Title" dense />
-            <q-select v-model="form.language" :options="languageOptions" label="language" dense/>
-            <q-input v-model="form.code" label="Code" dense type="textarea" class="q-mb-md"/>
-            <div class="action-buttons">
-                <q-btn color="primary" label="Submit" @click="showEditor = true"/>
-                <q-btn color="primary" label="Submit All" @click="submitAll"/>
-                <q-btn color="primary" label="Refresh" @click="refreshBtn"/>
-            </div>
-
-        </div>
-        <div class="q-mt-md">
-            <q-btn color="primary" label="Submit Code" @click="createSubmission"/>
-            <q-btn color="negative" label="Cancel" @click="showEditor = false"/>
-        </div> -->
-        <!-- <q-separator class="q-my-md"/>
-        <div v-if="submissions.length===0">No submissions yet - add one above!</div>
-
-        <q-card v-for="s in submissions" :key="s.id" class="cursor-point q-md-md" @click="openSubmission(s.id)">
-            <q-card-section>
-                <div class="text-subtitle1">{{ s.title }}</div>
-                <div class="text-caption">{{ s.language }}</div>
-            </q-card-section>
-        </q-card> -->
     </q-page>
 </template>
 

@@ -13,6 +13,7 @@ import { prisma } from './services/prisma'
 import { authRouter } from './routes/auth';
 import { projectsRouter } from './routes/projects';
 import { versionsRouter } from './routes/versions';
+import { commentsRouter } from './routes/comments';
 
 app.use(cors({ origin: 'http://localhost:9000', credentials: true }));
 app.use(helmet());
@@ -30,6 +31,7 @@ console.log("here is the JWT", JWT);
 app.use('/auth', authRouter);
 app.use('/projects', projectsRouter);
 app.use('/projects', versionsRouter);
+app.use('/projects/:projectId', commentsRouter);
 
 app.get('/health', async (_, res) => {
     // make a test user array in prisma seed in a sec

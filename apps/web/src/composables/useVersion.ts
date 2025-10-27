@@ -37,7 +37,6 @@ export function useVersion(projectId: number, versionId: number) {
             language.value = enumToMonaco(data.language);
             createdAt.value = data.createdAt;
             updatedAt.value = data.updatedAt;
-
         } catch (error) {
             errorMsg.value = error?.response?.data?.error || "failed to load file";
         } finally {

@@ -42,9 +42,8 @@ versionsRouter.get('/:projectId/v', async (req: AuthReq, res) => {
             return res.status(400).json({ error: 'Invalid project ID'})
         }
 
-        const allowed = await assertProjectMember(projectId, req.user!.id);
-
-        if(!allowed) return res.status(403).json({ error: 'Forbidden '});
+        // const allowed = await assertProjectMember(projectId, req.user!.id);
+        // if(!allowed) return res.status(403).json({ error: 'Forbidden '});
 
         const versions = await prisma.version.findMany({
             where: { projectId },
@@ -82,9 +81,9 @@ versionsRouter.get('/:projectId/v/:versionId', async (req: AuthReq, res) => {
             return res.status(400).json({ error: 'Invalid projectId or versionId'})
         }
 
-        if (!(await assertProjectMember(projectId, req.user!.id))) {
-            return res.status(403).json({ error: 'No persmissions'})
-        }
+        // if (!(await assertProjectMember(projectId, req.user!.id))) {
+        //     return res.status(403).json({ error: 'No persmissions'})
+        // }
     
         const version = await prisma.version.findFirst({ where: { id: versionId, projectId}})
         if(!version) return res.status(404).json({error: 'not found'});
@@ -98,9 +97,9 @@ versionsRouter.post('/:projectId/v', async (req: AuthReq, res) => {
     const projectId = +req.params.projectId;
     console.log('POST REQUEST: create version for projectId', projectId, 'payload = ', req.body);
     
-    if (!(await assertProjectMember(projectId, req.user!.id))) {
-        return res.status(403).json({ error: 'No persmissions'})
-    }
+    // if (!(await assertProjectMember(projectId, req.user!.id))) {
+    //     return res.status(403).json({ error: 'No persmissions'})
+    // }
 
     const parsed = CreateVersion.safeParse(req.body);
     if(!parsed.success) return res.status(400).json(parsed.error.flatten());
