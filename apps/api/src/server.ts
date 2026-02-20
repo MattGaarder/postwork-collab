@@ -28,21 +28,28 @@ if (!JWT) {
 
 console.log("here is the JWT", JWT);
 
+
 app.use('/auth', authRouter);
 app.use('/projects', projectsRouter);
 app.use('/projects', versionsRouter);
 app.use('/projects/:projectId', commentsRouter);
 
+// Debug route to get all users (for testing)
+app.get('/debug/users', async (_, res) => {
+    const users = await prisma.user.findMany();
+    res.json(users);
+});
+
 app.get('/health', async (_, res) => {
-    // make a test user array in prisma seed in a sec
     const users = await prisma.user.findMany();
     res.json({ ok: true, userCount: users.length })
 });
 
-
-
-
-
+// Global Error Handler
+app.use((err: any, req: any, res: any, next: any) => {
+    console.error('Global Error Handler:', err);
+    res.status(500).json({ error: err.message || 'Internal Server Error' });
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`API running at localhost:${PORT}`))

@@ -5,7 +5,7 @@ export interface AuthReq extends Request{ user?: { id: number }}
 
 export function requireAuth(req: AuthReq, res: Response, next: NextFunction) {
     const token = req.headers.authorization?.replace('Bearer ', '');
-    console.log("here is token ", token);
+    // console.log("here is token ", token);
     if(!token) return res.status(401).json({
         error: 'No Token'
     });

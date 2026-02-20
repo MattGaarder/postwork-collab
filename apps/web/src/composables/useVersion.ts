@@ -1,8 +1,7 @@
 import { ref } from 'vue';
-
 import { api } from '../lib/http';
-
 import { useRouter } from 'vue-router';
+import { useQuasar } from 'quasar';
 
 const enumToMonaco = (lang?: string) => {
     switch(lang) {
@@ -15,30 +14,32 @@ const enumToMonaco = (lang?: string) => {
 
 export function useVersion(projectId: number, versionId: number) {
     const router = useRouter();
+    const $q = useQuasar();
+
     const code = ref('');
     const language = ref('plaintext');
     const createdAt = ref<string | null>(null);
     const updatedAt = ref<string | null>(null);
     const isLoading = ref(false);
-    const errorMsg = ref('');
+    const errorMsg = ref(''); // Keeping for fallback or specific UI placement if needed, but primarily using Notify
 
-
-    // now to try and make it real-time
-
-    
     async function refresh() {
         errorMsg.value = '';
         isLoading.value = true;
 
-        console.log('refreshing with useVersion composable - ', projectId, versionId);
         try {
             const { data } = await api.get(`/projects/${projectId}/v/${versionId}`);
             code.value = data.code;
             language.value = enumToMonaco(data.language);
             createdAt.value = data.createdAt;
             updatedAt.value = data.updatedAt;
-        } catch (error) {
-            errorMsg.value = error?.response?.data?.error || "failed to load file";
+        } catch (error: any) {
+            const msg = error?.response?.data?.error || "Failed to load file";
+            errorMsg.value = msg;
+            $q.notify({
+                type: 'negative',
+                message: msg
+            });
         } finally {
             isLoading.value = false;
         }
@@ -48,7 +49,7 @@ export function useVersion(projectId: number, versionId: number) {
         errorMsg.value = '';
         isLoading.value = true;
         const payload = { code: newContent ?? code.value };
-        console.log('saving with useVersion composable - ', projectId, versionId, payload);
+
         try {
             const { data } = await api.post(`/projects/${projectId}/v`, payload);
             code.value = data.code;
@@ -57,8 +58,18 @@ export function useVersion(projectId: number, versionId: number) {
             createdAt.value = data.createdAt;
 
             router.push(`/projects/${projectId}/v/${data.id}`);
-        } catch (error) {            
-        errorMsg.value = error?.response?.data?.error || "failed to save file";
+            $q.notify({
+                type: 'positive',
+                message: 'Version saved successfully'
+            });
+            return data;
+        } catch (error: any) {
+            const msg = error?.response?.data?.error || "Failed to save file";
+            errorMsg.value = msg;
+            $q.notify({
+                type: 'negative',
+                message: msg
+            });
         } finally {
             isLoading.value = false;
         }

@@ -7,11 +7,12 @@
   "scripts": {
     "db:up": "docker compose -f docker/docker-compose.yml up -d",
     "db:down": "docker compose -f docker/docker-compose.yml down",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:generate": "prisma generate dev",
-    "seed": "ts-node prisma/seed.ts",
+    "prisma:migrate": "prisma migrate dev --schema=apps/api/prisma/schema.prisma",
+    "prisma:generate": "prisma generate --schema=apps/api/prisma/schema.prisma",
+    "seed": "ts-node apps/api/prisma/seed.ts",
     "api": "npm -w apps/api run dev",
-    "web": "npm -w apps/web run dev"
+    "web": "npm -w apps/web run dev",
+    "dev": "npm run api & npm run web"
   },
   "keywords": [],
   "author": "",

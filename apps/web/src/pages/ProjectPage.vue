@@ -12,11 +12,11 @@
         </div>
 
         <q-banner v-if="errorMsg" class="bg-red-1 text-red q-mb-md">{{ errorMsg }}</q-banner>
-        <MonacoEditor 
+        <MonacoEditor
             :language="language"
             theme="vs-dark"
             v-model:value="code"
-            
+
             height="600px"
             width="100%"
             :options="{ automaticLayout: true }"
@@ -31,104 +31,104 @@
 </template>
 
 <script setup>
-    import MonacoEditor from '@guolao/vue-monaco-editor';
-    import { ref, onMounted, onBeforeUnmount } from 'vue';
-    import { api } from '../lib/http';
-    import { useRoute, useRouter } from 'vue-router';
-    import { useVersion } from '../composables/useVersion'; 
-    import { useYDoc } from 'src/composables/useYDocs';
-
-   
-    // const router = useRouter();
-    const route = useRoute();
-    const router = useRouter();
-    const projectId = Number(route.params.projectId);
+  import MonacoEditor from '@guolao/vue-monaco-editor';
+  import { ref, onMounted, onBeforeUnmount } from 'vue';
+  import { api } from '../lib/http';
+  import { useRoute, useRouter } from 'vue-router';
+  import { useVersion } from '../composables/useVersion';
+  import { useYDoc } from 'src/composables/useYDocs';
 
 
-    const project = ref(null);
-    const versionId = Number(route.params.versionId);
-
-    
-
-    const { code, language, createdAt, updatedAt, isLoading, errorMsg, refresh, save } = useVersion(projectId, versionId || 0);
-    
+  // const router = useRouter();
+  const route = useRoute();
+  const router = useRouter();
+  const projectId = Number(route.params.projectId);
 
 
-    async function loadProject() {
-        console.log('submissions hi');
-        try {
-            const { data } = await api.get('/projects');
-            project.value = data.find(p => p.id === projectId);
-            console.log(project);
-        } catch (error) {
-            console.log(error);
-            errorMsg.value = 'Failed to load project';
-            return;
+  const project = ref(null);
+  const versionId = Number(route.params.versionId);
+
+
+
+  const { code, language, createdAt, updatedAt, isLoading, errorMsg, refresh, save } = useVersion(projectId, versionId || 0);
+
+
+
+  async function loadProject() {
+      console.log('submissions hi');
+      try {
+          const { data } = await api.get('/projects');
+          project.value = data.find(p => p.id === projectId);
+          console.log(project, "loading project....");
+      } catch (error) {
+          console.log(error);
+          errorMsg.value = 'Failed to load project';
+          return;
+      }
+
+      // try {
+      //     const subRes = await api.get(`/projects/${projectId}/submissions`);
+      //     submissions.value = subRes.data;
+      //     console.log(submissions.value);
+      // } catch (error) {
+      //     console.warn('Could not load submissions', error);
+      //     submissions.value = [];
+      // }
+  }
+
+  onMounted(async () => {
+    console.log('on ProjectPage mount project, projectId = ', projectId, 'versionId = ', versionId);
+    await loadProject();
+
+    if(!Number.isFinite(versionId)) {
+      try {
+        const { data: versions } = await api.get(`projects/${projectId}`);
+        if(Array.isArray(versions) && versions.length > 0) {
+            // if there are versions in existence (of the project with projectId specified) display the latest one (order 'desc'ending)
+            return router.replace(`projects/${projectId}/v/${versions[0].id}`);
+        } else {
+          // if there aren't post request a new version with the payload and reroute to new file
+          // we are doing no rewrites or updates just appending new versions for now
+          const { data: created } = await api.post(`project/${projectId}/v/`, { code: '' });
+          return router.replace(`projects/${projectId}/v/${created.id}`);
         }
-
-        // try {
-        //     const subRes = await api.get(`/projects/${projectId}/submissions`);
-        //     submissions.value = subRes.data;
-        //     console.log(submissions.value);
-        // } catch (error) {
-        //     console.warn('Could not load submissions', error);
-        //     submissions.value = [];
-        // }
+      } catch (error) {
+          errorMsg.value = 'could not replace version';
+          console.log(error)
+          return;
+      }
     }
+    await refresh();
+  });
 
-    onMounted(async () => {
-        console.log('on ProjectPage mount project, projectId = ', projectId, 'versionId = ', versionId);
-        await loadProject();
 
-        if(!Number.isFinite(versionId)) {
-            try {
-                const { data: versions } = await api.get(`projects/${projectId}`);
-                if(Array.isArray(versions) && versions.length > 0) {
-                    // if there are versions in existence (of the project with projectId specified) display the latest one (order 'desc'ending)
-                    return router.replace(`projects/${projectId}/v/${versions[0].id}`);
-                } else {
-                    // if there aren't post request a new version with the payload and reroute to new file
-                    // we are doing no rewrites or updates just appending new versions for now
-                    const { data: created } = await api.post(`project/${projectId}/v/`, { code: '' });
-                    return router.replace(`projects/${projectId}/v/${created.id}`);
-                }
-            } catch (error) {
-                errorMsg.value = 'could not replace version';
-                console.log(error)
-                return;
-            }
-        }
-        await refresh();
+  const room = `project-${projectId}-v-${versionId ?? 'latest'}`;
+  const { doc, status } = useYDoc(room);
+  const ytext = doc.getText('code');
+
+  function onMonacoMount(editor) {
+    const model = editor.getModel();
+    model.setValue(ytext.toString());
+
+    const disposeLocal = editor.onDidChangeModelContent(() => {
+      const next = model.getValue();
+      doc.transact(() => {
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, next);
+      })
+    })
+
+    const yObserver = () => {
+      const next = ytext.toString();
+      if(model.getValue() !== next)model.setValue(next)
+    }
+    ytext.observe(yObserver);
+
+    onBeforeUnmount(() => {
+        disposeLocal.dispose();
+        ytext.unobserve(yObserver);
     });
-
-
-    const room = `project-${projectId}-v-${versionId ?? 'latest'}`;
-    const { doc, status } = useYDoc(room);
-    const ytext = doc.getText('code');
-
-    function onMonacoMount(editor) {
-        const model = editor.getModel();
-        model.setValue(ytext.toString());
-
-        const disposeLocal = editor.onDidChangeModelContent(() => {
-            const next = model.getValue();
-            doc.transact(() => {
-                ytext.delete(0, ytext.length);
-                ytext.insert(0, next);
-            })
-        })
-
-        const yObserver = () => {
-            const next = ytext.toString();
-            if(model.getValue() !== next)model.setValue(next)
-        }
-        ytext.observe(yObserver);
-
-        onBeforeUnmount(() => {
-            disposeLocal.dispose();
-            ytext.unobserve(yObserver);
-        });
-    }
+  }
 </script>
 
 <style>
