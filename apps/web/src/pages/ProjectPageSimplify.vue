@@ -72,6 +72,7 @@ import { ref, onMounted, computed, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../lib/http';
 import MonacoEditor from '@guolao/vue-monaco-editor';
+import * as Y from 'yjs';
 
 import { useVersion } from '../composables/useVersion';
 import { useYDoc } from '../composables/useYDocs';
@@ -127,6 +128,7 @@ type UIComment = {
   endLine?: number | null;
   content: string;
   originalCode?: string | null;
+  yAnchor?: string | null;
   createdAt: string;
   author?: { id: number; name?: string | null; email?: string | null };
 }
@@ -411,12 +413,18 @@ function makeDom(line: number) {
     const body = ta.value.trim();
     if (!body) return;
     try {
+      const lineToAnchor = newLine.value || line;
+      const model = editorRef.getModel();
+      const offset = model.getOffsetAt({ lineNumber: lineToAnchor, column: 1 });
+      const relPos = Y.createRelativePositionFromTypeIndex(ytext, offset);
+
       // Submit comment to API
       const payload: any = {
-        line: newLine.value || line,
-        body
+        line: lineToAnchor,
+        body,
+        yAnchor: JSON.stringify(relPos)
       };
-      if (newEndLine.value && newEndLine.value > (newLine.value || line)) {
+      if (newEndLine.value && newEndLine.value > lineToAnchor) {
         payload.endLine = newEndLine.value;
       }
       await api.post(`projects/${projectId}/v/${currentVersionId.value}/comments`, payload);
@@ -448,6 +456,27 @@ const canSubmit = computed(() =>
   Boolean(currentVersionId.value && newLine.value && newLine.value > 0 && newBody.value.trim().length)
 );
 
+/**
+ * Resolves a comment's Yjs relative position to a current line number.
+ * If no yAnchor exists, it falls back to the static line number.
+ */
+function resolveCommentLine(comment: UIComment): number {
+  if (!comment.yAnchor || !isLatestVersion.value) return comment.line;
+
+  try {
+    const relPos = JSON.parse(comment.yAnchor);
+    const absPos = Y.createAbsolutePositionFromRelativePosition(relPos, doc);
+
+    if (absPos && editorRef) {
+      const pos = editorRef.getModel()?.getPositionAt(absPos.index);
+      if (pos) return pos.lineNumber;
+    }
+  } catch (err) {
+    console.error('Failed to resolve Yjs anchor:', err);
+  }
+  return comment.line;
+}
+
 
 async function fetchComments() {
   if (!currentVersionId.value) return;
@@ -457,13 +486,23 @@ async function fetchComments() {
   try {
     // Fetch current version comments (for inline widgets and red stripes)
     const { data: versionComments } = await api.get(`/projects/${projectId}/v/${currentVersionId.value}/comments`);
-    allComents.value = versionComments;
+
+    // Update the editor widgets whenever comments change
+    const resolvedComments = versionComments.map((c: any) => ({
+      ...c,
+      line: resolveCommentLine(c)
+    }));
+    allComents.value = resolvedComments;
 
     // Fetch ALL project comments relevant to the CURRENT version (persistent)
     const { data: projectComments } = await api.get(`/projects/${projectId}/comments`, {
       params: { versionId: currentVersionId.value }
     });
-    allProjectComments.value = projectComments;
+    const resolvedProjectComments = projectComments.map((c: any) => ({
+      ...c,
+      line: resolveCommentLine(c)
+    }));
+    allProjectComments.value = resolvedProjectComments;
 
     // Update the editor widgets whenever comments change
     updateCommentWidgets();
@@ -580,9 +619,14 @@ async function submitComment() {
   isPosting.value = true;
   errorMsg.value = "";
   try {
+    const model = editorRef.getModel();
+    const offset = model.getOffsetAt({ lineNumber: newLine.value!, column: 1 });
+    const relPos = Y.createRelativePositionFromTypeIndex(ytext, offset);
+
     const payload: any = {
       line: newLine.value,
-      body: newBody.value.trim()
+      body: newBody.value.trim(),
+      yAnchor: JSON.stringify(relPos)
     };
     if (newEndLine.value && newEndLine.value > newLine.value!) {
       payload.endLine = newEndLine.value;

@@ -15,7 +15,7 @@ const WS_URL = 'ws://localhost:1234';
  */
 export function useYDoc(roomRef: Ref<string> | string) {
     const doc = new Y.Doc();
-    const status = ref<'connecting' | 'connected' | 'disconnected'>('connecting');
+    const status = ref<'connecting...' | 'connected' | 'disconnected'>('connecting...');
 
     let provider: WebsocketProvider | null = null;
 
@@ -25,12 +25,23 @@ export function useYDoc(roomRef: Ref<string> | string) {
             provider.destroy();
             provider = null;
         }
-
-        status.value = 'connecting';
+        // connect() → creates provider
+        // getter → lets others read provider / window that lets you look at it
+        status.value = 'connecting...';
         provider = new WebsocketProvider(WS_URL, roomId, doc, { connect: true });
+        // 1. Creates a WebSocket connection
+        // 2. Starts trying to connect to the server
+        // 3. Internally listens for socket lifecycle events
+        // 4. Emits its own events
+        // It is an event emitter.
 
         provider.on('status', (e: { status: 'connected' | 'disconnected' }) => {
             status.value = e.status;
+          // “Run this callback whenever the provider emits a status eve
+          // So "status" here is:
+          // ✔ event type / event channel / event name
+          // ✔ not the Vue ref
+          // ✔ not the same as your variable called status
         });
     }
 

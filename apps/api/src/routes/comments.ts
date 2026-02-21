@@ -6,10 +6,19 @@ import { requireAuth, AuthReq } from '../middleware/requireAuth';
 export const commentsRouter = Router({ mergeParams: true });
 commentsRouter.use(requireAuth);
 
+async function assertProjectMember(projectId: number, userId: number) {
+    const project = await prisma.project.findUnique({ where: { id: projectId } })
+    if (!project) return false;
+    if(project.ownerId === userId) return true;
+    const member = await prisma.projectMember.findFirst({ where: { projectId, userId } })
+    return !!member;
+}
+
 const CreateComment = z.object({
     line: z.number().int().positive(),
     endLine: z.number().int().positive().optional(),
     body: z.string(),
+    yAnchor: z.string().optional(),
     // parentId: z.number().int().optional(),
 });
 
@@ -18,6 +27,10 @@ const CreateComment = z.object({
 commentsRouter.get('/comments', async (req: AuthReq, res) => {
     const projectId = Number(req.params.projectId);
     const versionId = req.query.versionId ? Number(req.query.versionId) : null;
+
+    if (!(await assertProjectMember(projectId, req.user!.id))) {
+        return res.status(403).json({ error: 'No permissions' });
+    }
 
     try {
         const where: any = { projectId };
@@ -45,6 +58,7 @@ commentsRouter.get('/comments', async (req: AuthReq, res) => {
                 endLine: true,
                 content: true,
                 originalCode: true,
+                yAnchor: true,
                 createdAt: true,
                 author: { select: { id: true, name: true, email: true } }
             }
@@ -62,6 +76,10 @@ commentsRouter.get('/comments', async (req: AuthReq, res) => {
 commentsRouter.get('/v/:versionId/comments', async (req: AuthReq, res) => {
     const projectId = Number(req.params.projectId);
     const versionId = Number(req.params.versionId);
+
+    if (!(await assertProjectMember(projectId, req.user!.id))) {
+        return res.status(403).json({ error: 'No permissions' });
+    }
 
     try {
         // Return comments that were active during this version
@@ -84,6 +102,7 @@ commentsRouter.get('/v/:versionId/comments', async (req: AuthReq, res) => {
                 endLine: true,
                 content: true,
                 originalCode: true,
+                yAnchor: true,
                 createdAt: true,
                 author: { select: { id: true, name: true, email: true } }
             }
@@ -100,6 +119,10 @@ commentsRouter.get('/v/:versionId/comments', async (req: AuthReq, res) => {
 commentsRouter.post('/v/:versionId/comments', async (req: AuthReq, res) => {
     const projectId = Number(req.params.projectId);
     const versionId = Number(req.params.versionId);
+
+    if (!(await assertProjectMember(projectId, req.user!.id))) {
+        return res.status(403).json({ error: 'No permissions' });
+    }
 
     const parsed = CreateComment.safeParse(req.body);
     if (!parsed.success) return res.status(400).json(parsed.error.flatten());
@@ -131,6 +154,7 @@ commentsRouter.post('/v/:versionId/comments', async (req: AuthReq, res) => {
                 endLine: parsed.data.endLine,
                 content: parsed.data.body,
                 originalCode,
+                yAnchor: parsed.data.yAnchor,
                 authorId: req.user!.id,
             },
             select: {
@@ -142,6 +166,7 @@ commentsRouter.post('/v/:versionId/comments', async (req: AuthReq, res) => {
                 endLine: true,
                 content: true,
                 originalCode: true,
+                yAnchor: true,
                 createdAt: true,
                 author: { select: { id: true, name: true, email: true } }
             }
@@ -158,9 +183,14 @@ commentsRouter.post('/v/:versionId/comments', async (req: AuthReq, res) => {
 commentsRouter.delete('/v/:versionId/comments/:commentId', async (req: AuthReq, res) => {
     const commentId = Number(req.params.commentId);
     const versionId = Number(req.params.versionId);
+    const projectId = Number(req.params.projectId);
+
+    if (!(await assertProjectMember(projectId, req.user!.id))) {
+        return res.status(403).json({ error: 'No permissions' });
+    }
 
     try {
-        await prisma.comment.update({
+       await prisma.comment.update({
             where: { id: commentId },
             data: {
                 resolvedVersionId: versionId

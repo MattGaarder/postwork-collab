@@ -24,8 +24,8 @@ versionsRouter.get('/:projectId/v', async (req: any, res) => {
     try {
         const projectId =+ req.params.projectId;
 
-        // const allowed = await assertProjectMember(projectId, req.user.id);
-        // if(!allowed) return res.status(403).json({ error: 'Forbidden '});
+        const allowed = await assertProjectMember(projectId, req.user.id);
+        if(!allowed) return res.status(403).json({ error: 'Forbidden '});
 
         const versions = await prisma.version.findMany({
             where: { projectId },
@@ -56,9 +56,9 @@ versionsRouter.get('/:projectId/v/:versionId', async (req: any, res) => {
         const projectId = +req.params.projectId;
         const versionId = +req.params.versionId;
 
-        // if (!(await assertProjectMember(projectId, req.user.id))) {
-        //     return res.status(403).json({ error: 'No persmissions'})
-        // }
+        if (!(await assertProjectMember(projectId, req.user.id))) {
+            return res.status(403).json({ error: 'No permissions'})
+        }
     
         const version = await prisma.version.findFirst({ where: { id: versionId, projectId}})
         if(!version) return res.status(404).json({error: 'not found'});
@@ -71,9 +71,9 @@ versionsRouter.get('/:projectId/v/:versionId', async (req: any, res) => {
 versionsRouter.post('/:projectId/v', async (req: any, res) => {
     const projectId = +req.params.projectId;
     
-    // if (!(await assertProjectMember(projectId, req.user.id))) {
-    //     return res.status(403).json({ error: 'No persmissions'})
-    // }
+    if (!(await assertProjectMember(projectId, req.user.id))) {
+        return res.status(403).json({ error: 'No permissions'})
+    }
 
     const { code, language } = req.body;
 
