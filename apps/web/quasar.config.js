@@ -83,6 +83,10 @@ export default defineConfig((/* ctx */) => {
           target: 'http://localhost:3000',
           changeOrigin: true,
         },
+        '/users': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+        },
       },
     },
 

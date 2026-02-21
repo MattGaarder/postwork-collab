@@ -14,6 +14,7 @@ import { authRouter } from './routes/auth';
 import { projectsRouter } from './routes/projects';
 import { versionsRouter } from './routes/versions';
 import { commentsRouter } from './routes/comments';
+import { usersRouter } from './routes/users';
 
 app.use(cors({ origin: 'http://localhost:9000', credentials: true }));
 app.use(helmet());
@@ -33,6 +34,7 @@ app.use('/auth', authRouter);
 app.use('/projects', projectsRouter);
 app.use('/projects', versionsRouter);
 app.use('/projects/:projectId', commentsRouter);
+app.use('/users', usersRouter);
 
 // Debug route to get all users (for testing)
 app.get('/debug/users', async (_, res) => {

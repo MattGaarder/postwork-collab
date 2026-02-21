@@ -146,30 +146,47 @@ commentsRouter.post('/v/:versionId/comments', async (req: AuthReq, res) => {
     }
 
     try {
-        const created = await prisma.comment.create({
-            data: {
-                projectId,           // Primary link - persists across versions
-                versionId,           // Optional reference - which version it was created on
-                line: parsed.data.line,
-                endLine: parsed.data.endLine,
-                content: parsed.data.body,
-                originalCode,
-                yAnchor: parsed.data.yAnchor,
-                authorId: req.user!.id,
-            },
-            select: {
-                id: true,
-                projectId: true,
-                versionId: true,
-                resolvedVersionId: true,
-                line: true,
-                endLine: true,
-                content: true,
-                originalCode: true,
-                yAnchor: true,
-                createdAt: true,
-                author: { select: { id: true, name: true, email: true } }
-            }
+        const created = await prisma.$transaction(async (tx) => {
+            const comment = await tx.comment.create({
+                data: {
+                    projectId,           // Primary link - persists across versions
+                    versionId,           // Optional reference - which version it was created on
+                    line: parsed.data.line,
+                    endLine: parsed.data.endLine,
+                    content: parsed.data.body,
+                    originalCode,
+                    yAnchor: parsed.data.yAnchor,
+                    authorId: req.user!.id,
+                },
+                select: {
+                    id: true,
+                    projectId: true,
+                    versionId: true,
+                    resolvedVersionId: true,
+                    line: true,
+                    endLine: true,
+                    content: true,
+                    originalCode: true,
+                    yAnchor: true,
+                    createdAt: true,
+                    author: { select: { id: true, name: true, email: true } }
+                }
+            });
+
+            await tx.pointsTransaction.create({
+                data: {
+                    userId: req.user!.id,
+                    actionType: 'COMMENT_CREATED',
+                    points: 5
+                }
+            });
+
+            await tx.user.update({
+                where: { id: req.user!.id },
+                data: { points: { increment: 5 } }
+            });
+
+            return comment;
         });
         res.status(201).json(created);
     } catch (error) {
@@ -190,11 +207,26 @@ commentsRouter.delete('/v/:versionId/comments/:commentId', async (req: AuthReq, 
     }
 
     try {
-       await prisma.comment.update({
-            where: { id: commentId },
-            data: {
-                resolvedVersionId: versionId
-            }
+        await prisma.$transaction(async (tx) => {
+           await tx.comment.update({
+                where: { id: commentId },
+                data: {
+                    resolvedVersionId: versionId
+                }
+            });
+
+            await tx.pointsTransaction.create({
+                data: {
+                    userId: req.user!.id,
+                    actionType: 'COMMENT_RESOLVED',
+                    points: 10
+                }
+            });
+
+            await tx.user.update({
+                where: { id: req.user!.id },
+                data: { points: { increment: 10 } }
+            });
         });
         res.status(204).send();
     } catch (error) {

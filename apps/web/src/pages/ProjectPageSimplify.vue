@@ -430,7 +430,8 @@ function makeDom(line: number) {
       await api.post(`projects/${projectId}/v/${currentVersionId.value}/comments`, payload);
       await fetchComments();
       editorRef?.revealLineInCenter(inlineLine);
-      closeInlineWidget()
+      closeInlineWidget();
+      $q.notify({ type: 'positive', message: 'Comment created! +5 Points', icon: 'star' });
     } catch (error) {
       console.error(error);
       $q.notify({ type: 'negative', message: 'Failed to add comment' });
@@ -634,6 +635,7 @@ async function submitComment() {
     await api.post(`/projects/${projectId}/v/${currentVersionId.value}/comments`, payload);
     newBody.value = "";
     await fetchComments();
+    $q.notify({ type: 'positive', message: 'Comment created! +5 Points', icon: 'star' });
 
   } catch (error) {
     $q.notify({ type: 'negative', message: 'Failed to post comment' });
@@ -677,7 +679,7 @@ async function resolveComment(commentId: number) {
     await api.delete(`/projects/${projectId}/v/${currentVersionId.value}/comments/${commentId}`);
     // Refresh both comment lists
     await fetchComments();
-    $q.notify({ type: 'positive', message: 'Comment resolved' });
+    $q.notify({ type: 'positive', message: 'Comment resolved! +10 Points', icon: 'star' });
   } catch (error) {
     console.error('Failed to resolve comment:', error);
     $q.notify({ type: 'negative', message: 'Failed to resolve comment' });
