@@ -11,6 +11,17 @@ export const useAuth = defineStore('auth', {
         logout() {
             this.token = null; this.user = null;
             localStorage.removeItem('jwt');
+        },
+        async initialize() {
+            if (!this.token) return;
+            try {
+                const { api } = await import("../lib/http");
+                const { data } = await api.get("/auth/me");
+                this.user = data;
+            } catch (error) {
+                console.error("Failed to initialize auth:", error);
+                this.logout();
+            }
         }
     }
 });

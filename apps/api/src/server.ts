@@ -15,6 +15,7 @@ import { projectsRouter } from './routes/projects';
 import { versionsRouter } from './routes/versions';
 import { commentsRouter } from './routes/comments';
 import { usersRouter } from './routes/users';
+import { invitationsRouter } from './routes/invitations';
 
 app.use(cors({ origin: 'http://localhost:9000', credentials: true }));
 app.use(helmet());
@@ -35,6 +36,7 @@ app.use('/projects', projectsRouter);
 app.use('/projects', versionsRouter);
 app.use('/projects/:projectId', commentsRouter);
 app.use('/users', usersRouter);
+app.use('/invitations', invitationsRouter);
 
 // Debug route to get all users (for testing)
 app.get('/debug/users', async (_, res) => {

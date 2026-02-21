@@ -17,7 +17,11 @@ usersRouter.get('/me/points', async (req: AuthReq, res) => {
                 points: true,
                 transactions: {
                     orderBy: { createdAt: 'desc' },
-                    take: 10
+                    take: 10,
+                    include: {
+                        project: { select: { name: true } },
+                        performer: { select: { id: true, name: true, email: true } }
+                    }
                 }
             }
         });
@@ -27,7 +31,7 @@ usersRouter.get('/me/points', async (req: AuthReq, res) => {
         }
         res.json(user);
     } catch (error) {
-        console.error('Error fetching user points:', error);
+        console.error('CRITICAL USER POINTS ERROR:', error);
         res.status(500).json({ error: 'Failed to fetch points' });
     }
 });

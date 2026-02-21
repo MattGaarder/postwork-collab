@@ -1,7 +1,10 @@
 <template>
   <q-page padding>
     <div class="row items-center q-mb-md">
-      <div class="text-h5">p{{ projectId }}.v{{ currentVersionId ?? "latest" }} - {{ project?.name || "Loading.." }}
+      <div class="text-h5">
+        p{{ projectId }}.v{{ isFinite(currentVersionId) ? currentVersionId : "latest" }} -
+        {{ project?.name || `Project #${projectId}` }}
+        <q-spinner-dots v-if="!project" color="white" size="xs" class="q-ml-sm" />
       </div>
       <q-space />
       <q-chip v-if="!isLatestVersion" color="orange" text-color="white" icon="history" dense class="q-mr-sm">
@@ -52,8 +55,8 @@
     <div class="text-caption text-grey-7 q-mt-md">
       Line - {{ newLine || '--' }}
     </div>
-    <ProjectCommentsList :comments="sortedAllComments" @view="navigateToComment" @resolve="resolveComment"
-      @apply="applyCommentChange" />
+    <ProjectCommentsList :comments="sortedAllComments" :currentVersionId="currentVersionId" @view="navigateToComment"
+      @resolve="resolveComment" @apply="applyCommentChange" />
 
   </q-page>
 </template>
@@ -84,8 +87,13 @@ const router = useRouter();
 const $q = useQuasar();
 
 const INLINE_WIDGET_ID = "INLINE_WIDGET_ID";
-const projectId = Number(route.params.projectId);
+const projectId = computed(() => Number(route.params.projectId));
 const currentVersionId = ref<number>(Number(route.params.versionId));
+
+// Sync currentVersionId when route changes
+watch(() => route.params.versionId, (newId) => {
+  currentVersionId.value = Number(newId);
+});
 
 // Version navigation state
 const allVersions = ref<any[]>([]);
@@ -107,7 +115,7 @@ const isLatestVersion = computed(() => {
 // All users collaborate on a single stable room per project: "project-{id}-main".
 // This means everyone stays connected even after a save creates a new version.
 // Old versions are shown in read-only mode (no YJS sync needed for history).
-const room = computed(() => `project-${projectId}-main`);
+const room = computed(() => `project-${projectId.value}-main`);
 
 // useYDoc is a custom composable that connects to the WebSocket server.
 // 'doc' is the shared document, 'status' tells us if we are connected.
@@ -151,7 +159,7 @@ let disposeCursorListener: (() => void) | null = null;
 let disposeLocalToY: (() => void) | null = null;
 let disposeYToLocal: (() => void) | null = null;
 
-const { isLoading, errorMsg, refresh, save, code } = useVersion(projectId, currentVersionId.value || 0);
+const { isLoading, errorMsg, refresh, save, code } = useVersion(projectId, currentVersionId);
 
 let monacoRef: any = null;
 let inlineWidget: any | null = null
@@ -427,7 +435,7 @@ function makeDom(line: number) {
       if (newEndLine.value && newEndLine.value > lineToAnchor) {
         payload.endLine = newEndLine.value;
       }
-      await api.post(`projects/${projectId}/v/${currentVersionId.value}/comments`, payload);
+      await api.post(`projects/${projectId.value}/v/${currentVersionId.value}/comments`, payload);
       await fetchComments();
       editorRef?.revealLineInCenter(inlineLine);
       closeInlineWidget();
@@ -486,7 +494,7 @@ async function fetchComments() {
 
   try {
     // Fetch current version comments (for inline widgets and red stripes)
-    const { data: versionComments } = await api.get(`/projects/${projectId}/v/${currentVersionId.value}/comments`);
+    const { data: versionComments } = await api.get(`/projects/${projectId.value}/v/${currentVersionId.value}/comments`);
 
     // Update the editor widgets whenever comments change
     const resolvedComments = versionComments.map((c: any) => ({
@@ -496,7 +504,7 @@ async function fetchComments() {
     allComents.value = resolvedComments;
 
     // Fetch ALL project comments relevant to the CURRENT version (persistent)
-    const { data: projectComments } = await api.get(`/projects/${projectId}/comments`, {
+    const { data: projectComments } = await api.get(`/projects/${projectId.value}/comments`, {
       params: { versionId: currentVersionId.value }
     });
     const resolvedProjectComments = projectComments.map((c: any) => ({
@@ -569,14 +577,22 @@ function updateCommentWidgets() {
 
       comments.forEach(c => {
         const el = document.createElement('div');
-        el.className = 'thread-comment';
+        const isResolvedNow = c.resolvedVersionId === currentVersionId.value;
+        el.className = 'thread-comment' + (isResolvedNow ? ' is-resolved-now' : '');
+
         const lineRange = c.endLine && c.endLine > c.line
           ? `Lines ${c.line}-${c.endLine}`
           : `Line ${c.line}`;
+
+        const resolvedBadge = isResolvedNow
+          ? '<span class="tc-resolved-badge">RESOLVED</span>'
+          : '';
+
         el.innerHTML = `
                         <div class="tc-meta">
                             <strong>${c.author?.name || c.author?.email || 'Anonymous'}</strong>
                             <span class="tc-line">${lineRange}</span>
+                            ${resolvedBadge}
                             <span class="tc-date">${new Date(c.createdAt).toLocaleDateString()}</span>
                         </div>
                         <div class="tc-body">${c.content}</div>
@@ -632,7 +648,7 @@ async function submitComment() {
     if (newEndLine.value && newEndLine.value > newLine.value!) {
       payload.endLine = newEndLine.value;
     }
-    await api.post(`/projects/${projectId}/v/${currentVersionId.value}/comments`, payload);
+    await api.post(`/projects/${projectId.value}/v/${currentVersionId.value}/comments`, payload);
     newBody.value = "";
     await fetchComments();
     $q.notify({ type: 'positive', message: 'Comment created! +5 Points', icon: 'star' });
@@ -641,6 +657,18 @@ async function submitComment() {
     $q.notify({ type: 'negative', message: 'Failed to post comment' });
   } finally {
     isPosting.value = false;
+  }
+}
+
+function scrollToLineFromQuery() {
+  const line = Number(route.query.line);
+  if (line && editorRef) {
+    console.log('Scrolling to line from query:', line);
+    setTimeout(() => {
+      editorRef.revealLineInCenter(line);
+      editorRef.setPosition({ lineNumber: line, column: 1 });
+      editorRef.focus();
+    }, 800); // Give extra time for Yjs and Monaco to stabilize
   }
 }
 
@@ -657,17 +685,8 @@ function navigateToComment(comment: UIComment) {
     }
   } else {
     // Navigate to the version, then scroll (will happen after route loads)
-    router.push(`/projects/${projectId}/v/${comment.versionId}`);
-    // The scroll will happen automatically after the version loads
-    // because the route watcher will trigger, load the code, and we can scroll then
-    // We'll use a timeout to ensure the editor is ready
-    setTimeout(() => {
-      if (editorRef) {
-        editorRef.revealLineInCenter(comment.line);
-        editorRef.setPosition({ lineNumber: comment.line, column: 1 });
-        editorRef.focus();
-      }
-    }, 500);
+    router.push(`/projects/${projectId.value}/v/${comment.versionId}?line=${comment.line}`);
+    // The scroll will be handled by the route watcher
   }
 }
 
@@ -676,7 +695,7 @@ function navigateToComment(comment: UIComment) {
  */
 async function resolveComment(commentId: number) {
   try {
-    await api.delete(`/projects/${projectId}/v/${currentVersionId.value}/comments/${commentId}`);
+    await api.delete(`/projects/${projectId.value}/v/${currentVersionId.value}/comments/${commentId}`);
     // Refresh both comment lists
     await fetchComments();
     $q.notify({ type: 'positive', message: 'Comment resolved! +10 Points', icon: 'star' });
@@ -709,13 +728,13 @@ async function saveCurrent() {
 
 async function loadProject() {
   try {
-    const { data } = await api.get('/projects');
-    project.value = data.find(p => p.id === projectId);
-    console.log('hello', project);
+    const { data } = await api.get(`/projects/${projectId.value}`);
+    project.value = data;
+    console.log('Project loaded:', project.value?.name);
   } catch (error) {
     console.log(error);
-    $q.notify({ type: 'negative', message: 'Failed to load project' });
-    return;
+    project.value = { name: `Project #${projectId.value}` };
+    $q.notify({ type: 'negative', message: 'Failed to load project details' });
   }
 }
 
@@ -726,8 +745,9 @@ async function loadProject() {
  * 3. Load project details and comments.
  */
 async function loadVersionList() {
+  if (!projectId.value) return;
   try {
-    const { data } = await api.get(`/projects/${projectId}/v`);
+    const { data } = await api.get(`/projects/${projectId.value}/v`);
     allVersions.value = data;
   } catch (error) {
     console.error('Failed to load versions:', error);
@@ -737,76 +757,75 @@ async function loadVersionList() {
 function navigateToPreviousVersion() {
   if (!hasPreviousVersion.value) return;
   const prevVersion = allVersions.value[currentVersionIndex.value + 1];
-  router.push(`/projects/${projectId}/v/${prevVersion.id}`);
+  router.push(`/projects/${projectId.value}/v/${prevVersion.id}`);
 }
 
 function navigateToNextVersion() {
   if (!hasNextVersion.value) return;
   const nextVersion = allVersions.value[currentVersionIndex.value - 1];
-  router.push(`/projects/${projectId}/v/${nextVersion.id}`);
+  router.push(`/projects/${projectId.value}/v/${nextVersion.id}`);
 }
 
 onMounted(async () => {
-  console.log('on ProjectPage mount project, projectId = ', projectId, 'versionId = ', currentVersionId.value);
-  // await loadProject();
+  console.log('on ProjectPage mount project, projectId = ', projectId.value, 'versionId = ', currentVersionId.value);
+  await initComponent();
+});
 
-  if (!Number.isFinite(currentVersionId.value)) {
-    try {
-      const { data: versions } = await api.get(`/projects/${projectId}/v`);
-      if (Array.isArray(versions) && versions.length > 0) {
-        // Redirect to the latest version
-        return router.replace(`/projects/${projectId}/v/${versions[0].id}`);
-      } else {
-        // Create first version if none exist
-        const { data: created } = await api.post(`/projects/${projectId}/v/`, { code: '' });
-        return router.replace(`/projects/${projectId}/v/${created.id}`);
-      }
-    } catch (error) {
-      $q.notify({ type: 'negative', message: 'Could not replace version' });
-      console.log(error)
-      return;
-    }
+// Watch for project changes
+watch(projectId, async (newId) => {
+  if (newId) {
+    console.log('Project ID changed, full reload:', newId);
+    await initComponent();
   }
-  await loadVersionList();
-  await refresh();
-  await fetchComments();
-  await loadProject();
 });
 
 // Watch for route changes and reload the version from SQL
-watch(() => route.params.versionId, async (newVersionId) => {
-  if (newVersionId && Number(newVersionId) !== currentVersionId.value) {
-    console.log('Version changed in route, reloading from SQL, versionId:', newVersionId);
-    currentVersionId.value = Number(newVersionId);
-
+watch(currentVersionId, async (newVersionId) => {
+  if (newVersionId) {
+    console.log('Version changed, refreshing data:', newVersionId);
+    if (!project.value) await loadProject();
     // Reload version data from SQL for the NEW version
-    // We fetch directly here because the useVersion composable was created with the initial versionId
-    try {
-      const { data } = await api.get(`/projects/${projectId}/v/${currentVersionId.value}`);
-      code.value = data.code;
-      console.log('Loaded new version code:', data.code?.substring(0, 100));
+    await refresh();
+    await fetchComments();
+    scrollToLineFromQuery();
 
-      // Update the editor to display the version's code
-      if (editorRef) {
-        const model = editorRef.getModel?.();
-        if (model) {
-          console.log('Updating editor with new version code');
-          model.setValue(data.code || '');
-          // Only update Yjs if this is the latest version
-          // (don't overwrite live collaboration with old version content)
-          if (isLatestVersion.value) {
-            setYText(data.code || '');
-          }
+    // Update the editor to display the version's code if it changed
+    if (editorRef && code.value !== undefined) {
+      const model = editorRef.getModel?.();
+      if (model && model.getValue() !== code.value) {
+        model.setValue(code.value || '');
+        // Only update Yjs if this is the latest version
+        if (isLatestVersion.value) {
+          setYText(code.value || '');
         }
       }
-    } catch (error) {
-      console.error('Failed to load version:', error);
-      $q.notify({ type: 'negative', message: 'Failed to load version' });
     }
-
-    await fetchComments();
   }
 });
+
+async function initComponent() {
+  // Always load project first so we have the name immediately
+  await loadProject();
+  await loadVersionList();
+
+  if (!Number.isFinite(currentVersionId.value)) {
+    try {
+      const { data: versions } = await api.get(`/projects/${projectId.value}/v`);
+      if (Array.isArray(versions) && versions.length > 0) {
+        return router.replace(`/projects/${projectId.value}/v/${versions[0].id}`);
+      } else {
+        const { data: created } = await api.post(`/projects/${projectId.value}/v/`, { code: '' });
+        return router.replace(`/projects/${projectId.value}/v/${created.id}`);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  await refresh();
+  await fetchComments();
+  scrollToLineFromQuery();
+}
 
 onBeforeUnmount(() => {
   closeInlineWidget();
@@ -970,6 +989,26 @@ onBeforeUnmount(() => {
 .tc-line {
   color: #888;
   margin: 0 8px;
+}
+
+.is-resolved-now {
+  opacity: 0.5;
+  filter: grayscale(0.8);
+}
+
+.is-resolved-now .tc-body {
+  text-decoration: line-through;
+  color: #888;
+}
+
+.tc-resolved-badge {
+  background: #2e7d32;
+  color: white;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: bold;
+  vertical-align: middle;
 }
 
 /* ────────────────

@@ -177,7 +177,11 @@ commentsRouter.post('/v/:versionId/comments', async (req: AuthReq, res) => {
                 data: {
                     userId: req.user!.id,
                     actionType: 'COMMENT_CREATED',
-                    points: 5
+                    points: 5,
+                    projectId,
+                    versionId,
+                    line: parsed.data.line,
+                    commentId: comment.id
                 }
             });
 
@@ -215,11 +219,19 @@ commentsRouter.delete('/v/:versionId/comments/:commentId', async (req: AuthReq, 
                 }
             });
 
+            // Fetch comment context for technical metadata
+            const comment = await tx.comment.findUnique({ where: { id: commentId } });
+
             await tx.pointsTransaction.create({
                 data: {
                     userId: req.user!.id,
                     actionType: 'COMMENT_RESOLVED',
-                    points: 10
+                    points: 10,
+                    projectId,
+                    versionId,
+                    line: comment?.line,
+                    commentId,
+                    performerId: req.user!.id
                 }
             });
 

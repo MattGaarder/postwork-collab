@@ -19,14 +19,44 @@ projectsRouter.get('/', asyncHandler(async (req: any, res: any) => {
         where: { 
             OR: [
                 { ownerId: req.user.id },
-                { members: { some: { userId: req.user.id } } }
+                { members: { some: { userId: req.user.id, status: 'ACCEPTED' } } }
             ]
         },
         include: {
-            owner: { select: { id: true, name: true, email: true } }
+            owner: { select: { id: true, name: true, email: true } },
+            members: {
+                where: { status: 'ACCEPTED' },
+                include: {
+                    user: { select: { id: true, name: true, email: true } }
+                }
+            }
         }
     });
     res.json(projects);
+}));
+
+projectsRouter.get('/:id', asyncHandler(async (req: any, res: any) => {
+    const id = Number(req.params.id);
+    const project = await prisma.project.findUnique({
+        where: { id },
+        include: {
+            owner: { select: { id: true, name: true, email: true } },
+            members: {
+                include: {
+                    user: { select: { id: true, name: true, email: true } }
+                }
+            }
+        }
+    });
+
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const isMember = project.ownerId === req.user.id || 
+                     project.members.some(m => m.userId === req.user.id);
+    
+    if (!isMember) return res.status(403).json({ error: 'No permissions' });
+
+    res.json(project);
 }));
 
 projectsRouter.get('/:id/code', asyncHandler(async (req: any, res: any) => {
@@ -123,25 +153,69 @@ projectsRouter.post('/:id/members', asyncHandler(async (req: any, res: any) => {
     if (!userToInvite) return res.status(404).json({ error: 'User not found' });
     if (userToInvite.id === req.user.id) return res.status(400).json({ error: 'You cannot invite yourself' });
 
-    // 3. Create or update membership
+    // 3. Create or update membership as PENDING
     try {
-        const membership = await prisma.projectMember.upsert({
-            where: {
-                projectId_userId: {
+        const membership = await prisma.$transaction(async (tx) => {
+            const m = await tx.projectMember.upsert({
+                where: {
+                    projectId_userId: {
+                        projectId,
+                        userId: userToInvite.id
+                    }
+                },
+                update: {}, // No roles to update
+                create: {
                     projectId,
-                    userId: userToInvite.id
+                    userId: userToInvite.id,
+                    status: 'PENDING'
                 }
-            },
-            update: { role: 'MAINTAINER' },
-            create: {
-                projectId,
-                userId: userToInvite.id,
-                role: 'MAINTAINER'
-            }
+            });
+
+            // Create a pseudo-transaction for the invitee so it shows up in their activity immediately
+            await tx.pointsTransaction.create({
+                data: {
+                    userId: userToInvite.id,
+                    actionType: 'INVITATION_SENT',
+                    points: 0,
+                    projectId,
+                    performerId: req.user.id
+                }
+            });
+
+            return m;
         });
         res.status(201).json(membership);
     } catch (error) {
         console.error('Failed to invite member:', error);
         res.status(500).json({ error: 'Failed to invite member' });
     }
+}));
+
+projectsRouter.delete('/:id/members/:userId', asyncHandler(async (req: any, res: any) => {
+    const projectId = Number(req.params.id);
+    const userIdToRemove = Number(req.params.userId);
+
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    // Only owners can remove others. Users can remove themselves (leave project).
+    if (project.ownerId !== req.user.id && req.user.id !== userIdToRemove) {
+        return res.status(403).json({ error: 'Only owners can remove members' });
+    }
+    
+    // Prevent removing the owner
+    if(userIdToRemove === project.ownerId) {
+        return res.status(400).json({ error: 'Cannot remove the project owner' });
+    }
+
+    await prisma.projectMember.delete({
+        where: {
+            projectId_userId: {
+                projectId,
+                userId: userIdToRemove
+            }
+        }
+    });
+
+    res.status(204).send();
 }));

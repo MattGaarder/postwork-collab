@@ -49,7 +49,7 @@
                 <div class="text-h6 text-weight-medium text-primary ellipsis">{{ p.name }}</div>
                 <div class="text-caption text-grey-6 q-mt-xs">
                   <q-badge color="secondary" outline class="q-mr-sm">{{ p.language || 'JavaScript'
-                  }}</q-badge>
+                    }}</q-badge>
                   <q-badge v-if="p.ownerId !== auth.user.id" color="orange" flat class="q-mr-sm">
                     Collaborator (Owner: {{ p.owner?.name || p.owner?.email }})
                   </q-badge>
@@ -76,6 +76,12 @@
               {{ p.description || 'No description provided.' }}
             </div>
           </q-card-section>
+
+          <q-separator inset />
+
+          <q-card-actions align="right">
+            <q-btn flat dense color="primary" label="Show Members" icon="group" @click.stop="openMembersDialog(p)" />
+          </q-card-actions>
         </q-card>
       </div>
     </div>
@@ -96,6 +102,55 @@
           <q-btn flat label="Cancel" v-close-popup />
           <q-btn flat label="Invite" :loading="inviteDialog.loading" @click="inviteMember" />
         </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Members Dialog -->
+    <q-dialog v-model="membersDialog.show">
+      <q-card style="min-width: 400px">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">Members: {{ membersDialog.project?.name }}</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <q-list bordered separator padding class="rounded-borders">
+            <!-- Owner first -->
+            <q-item>
+              <q-item-section avatar>
+                <q-icon name="stars" color="amber-9" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label>{{ membersDialog.project?.owner?.name || 'Owner' }} (Owner)</q-item-label>
+                <q-item-label caption>{{ membersDialog.project?.owner?.email }}</q-item-label>
+              </q-item-section>
+            </q-item>
+
+            <!-- Other members -->
+            <template v-if="membersDialog.project?.members?.length">
+              <q-item v-for="m in membersDialog.project.members" :key="m.userId">
+                <q-item-section avatar>
+                  <q-icon name="person" color="primary" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>{{ m.user.name || 'User' }}</q-item-label>
+                  <q-item-label caption>{{ m.user.email }}</q-item-label>
+                </q-item-section>
+                <q-item-section side v-if="membersDialog.project.ownerId === auth.user.id">
+                  <q-btn flat round dense color="negative" icon="person_remove" @click="confirmRemoveMember(m)">
+                    <q-tooltip>Remove Member</q-tooltip>
+                  </q-btn>
+                </q-item-section>
+              </q-item>
+            </template>
+            <q-item v-else-if="!membersDialog.project?.members?.length">
+              <q-item-section class="text-center text-grey-6 q-pa-md">
+                No other members yet.
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
       </q-card>
     </q-dialog>
   </q-page>
@@ -257,7 +312,7 @@ async function inviteMember() {
 
     $q.notify({
       type: 'positive',
-      message: `User invited to ${inviteDialog.value.project.name}`
+      message: `Invitation sent to ${inviteDialog.value.email.trim()}`
     });
     inviteDialog.value.show = false;
   } catch (error) {
@@ -268,6 +323,43 @@ async function inviteMember() {
   } finally {
     inviteDialog.value.loading = false;
   }
+}
+
+const membersDialog = ref({
+  show: false,
+  project: null
+});
+
+function openMembersDialog(project) {
+  membersDialog.value.project = project;
+  membersDialog.value.show = true;
+}
+
+function confirmRemoveMember(member) {
+  const userName = member.user.name || member.user.email;
+  $q.dialog({
+    title: 'Remove Member',
+    message: `Are you sure you want to remove ${userName} from this project?`,
+    cancel: true,
+    persistent: true
+  }).onOk(async () => {
+    try {
+      await api.delete(`/projects/${membersDialog.value.project.id}/members/${member.userId}`);
+
+      // Update local state
+      membersDialog.value.project.members = membersDialog.value.project.members.filter(m => m.userId !== member.userId);
+
+      $q.notify({
+        type: 'positive',
+        message: `Successfully removed ${userName} from this project.`
+      });
+    } catch (error) {
+      $q.notify({
+        type: 'negative',
+        message: 'Failed to remove member: ' + humanizeError(error)
+      });
+    }
+  });
 }
 
 function humanizeError(err) {
